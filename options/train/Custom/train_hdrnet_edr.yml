@@ -1,0 +1,108 @@
+# GENERATE TIME: Thu Jul 23 09:46:08 2026
+# CMD:
+# basicsr/train.py -opt options/train/Custom/train_hdrnet_edr.yml --auto_resume
+
+name: train_hdrnet_edr_google
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+
+datasets:
+  train:
+    name: HDRTrainSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/sdr
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+    gt_size: 768
+    use_hflip: true
+    use_rot: true
+
+    batch_size_per_gpu: 16
+    num_worker_per_gpu: 8
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~   # 先关掉，确认版本后可改 'cpu' 并加 num_prefetch_queue
+
+  val:
+    name: HDRValSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/val/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/val/sdr
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnet
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 16
+  num_downsample: 3
+  num_residual: 2
+  fixed_ds_size: 512
+
+train:
+  ema: true
+  ema_decay: 0.999
+
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-3
+    weight_decay: !!float 1e-6
+    betas: [0.9, 0.999]
+
+  # 学习率调度器（保留原有）
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [200000]  # 学习率周期
+    restart_weights: [1.0]  # 重启权重
+    eta_min: !!float 1e-6  # 最小学习率
+
+  # 训练迭代参数（保留原有）
+  total_iter: 200000
+  warmup_iter: 2000
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+val:
+  val_freq: 5000
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 5000
+  use_tb_logger: true
+  tb_logger_freq: 100
+  # 如果暂时不用 wandb，可以注释掉下面
+  # wandb:
+  #   project: 'hdrnet'
+  #   resume_id: ~
+
+path:
+  root: ./experiments
+  pretrain_network_g: ~
+  strict_load: true
+  resume_state: ~
+
+dist_params:
+  backend: nccl
+  port: 29500

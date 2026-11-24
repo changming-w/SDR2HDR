@@ -1,0 +1,40 @@
+name: train_hdrnet_simple_v2
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+dist: false
+
+datasets:
+  test_1:
+    name: HDRTestSet
+    type: SingleImageDataset
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/阳光绿原图
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetSimpleV2
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 16
+  num_downsample: 3
+  num_residual: 2
+  fixed_ds_size: 512
+
+inference:
+  hdrnet_strength: 1.0
+
+path:
+  pretrain_network_g: /mnt/data/wcm/HDRNet/experiments/train_hdrnet_simple_v2/models/net_g_latest.pth
+  strict_load_g: true
+
+val:
+  save_img: true
+  pbar: true
+  suffix: ''
+
+  metrics: {}

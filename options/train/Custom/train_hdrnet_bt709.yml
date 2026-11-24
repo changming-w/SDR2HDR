@@ -1,0 +1,102 @@
+# GENERATE TIME: Tue Jul 28 11:11:28 2026
+# CMD:
+# basicsr/train.py -opt options/train/Custom/train_hdrnet_bt709.yml --auto_resume
+
+name: train_hdrnet_bt709
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+
+datasets:
+  train:
+    name: HDRTrainSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/sdr
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+    gt_size: 768
+    use_hflip: true
+    use_rot: true
+
+    batch_size_per_gpu: 16
+    num_worker_per_gpu: 8
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: HDRValSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/val/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/val/sdr
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 16
+  num_downsample: 3
+  num_residual: 2
+  fixed_ds_size: 512
+
+train:
+  ema: true
+  ema_decay: 0.999
+
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-4
+    weight_decay: !!float 1e-6
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [200000]
+    restart_weights: [1.0]
+    eta_min: !!float 1e-6
+
+  total_iter: 200000
+  warmup_iter: 2000
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+val:
+  val_freq: 2000
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 2000
+  use_tb_logger: true
+  tb_logger_freq: 200
+
+path:
+  root: ./experiments
+  pretrain_network_g: ~
+  strict_load: true
+  auto_resume: true
+
+dist_params:
+  backend: nccl
+  port: 29500

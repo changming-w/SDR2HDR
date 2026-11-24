@@ -1,0 +1,38 @@
+name: test_hdrnet_bt709_sdr2hdr_luma_only_gd16_bc1_gc64_inp256_gw32_bt2020
+model_type: SRModel
+scale: 1
+num_gpu: 0
+manual_seed: 1234
+dist: false
+
+datasets:
+  test_1:
+    name: SDR2HDR_Val
+    type: SingleImageDataset
+    # dataroot_lq: /mnt/data/wcm/data/hdr/train/数据采集/标准模式全开测试数据_vb1_converted/dump_sdr
+    dataroot_lq: /mnt/data/wcm/data/hdr/train/数据采集/电影模式_色彩空间原始色温标准关闭LD_vb1/test/model_input_bt2020
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709PaperLumaOnly
+  # 0.52M
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 1
+  fixed_ds_size: 256
+  global_channels: 64
+
+path:
+  pretrain_network_g: /mnt/data/wcm/HDRNet/experiments/train_hdrnet_bt709_sdr2hdr_luma_only_gd16_bc1_gc64_inp256_gw32/models/net_g_480000.pth
+  strict_load_g: true
+
+val:
+  save_img: true
+  pbar: true
+  suffix: ''
+
+  metrics: {}

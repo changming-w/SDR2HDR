@@ -1,0 +1,28 @@
+name: aisr_resnet_split_plus_test_nogt
+model_type: Deblur6D3Model   # 和你训练时的一样
+scale: 1
+num_gpu: 0
+manual_seed: 0
+dist: false
+
+datasets:
+  test_1:
+    name: AisrTestNoGT
+    type: SingleImageDataset
+    dataroot_lq: /mnt/data/datasets/HDR/test_1223
+    io_backend:
+      type: disk
+
+network_g:
+  type: Deblur_ResNet_ConvDown_PS4_Attn_Split_Plus_Model  # 和训练配置里的 network_g.type 完全一致
+  num_channels: 64                              # 其它结构参数也照训练 yml 填
+
+path:
+  pretrain_network_g: /mnt/data/wcm/HDRNet/basicsr/experiments/train_4K_enhce_3/models/net_g_10000.pth
+  strict_load_g: true
+  param_key_g: params       # 关键修改：从 ckpt['params'] 里取 state_dict
+
+val:
+  save_img: true
+  suffix: ''
+  metrics: {}               # 没有 GT，不计算指标

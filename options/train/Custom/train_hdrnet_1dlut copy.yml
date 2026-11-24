@@ -1,0 +1,90 @@
+# GENERATE TIME: Mon Jul 27 14:52:53 2026
+# CMD:
+# basicsr/train.py -opt options/train/Custom/train_hdrnet_1dlut.yml --auto_resume
+
+name: train_hdrnet_1dlut
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+dist: false
+
+datasets:
+  train:
+    name: HDRTrainSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/sdr
+    io_backend:
+      type: disk
+    gt_size: 512
+    use_hflip: true
+    use_rot: false
+    batch_size_per_gpu: 16
+    num_worker_per_gpu: 8
+
+  val:
+    name: HDRValSet
+    type: PairedImageDataset
+    dataroot_gt: /mnt/data/wcm/20260711_color_enhance_plants2/val/edr
+    dataroot_lq: /mnt/data/wcm/20260711_color_enhance_plants2/val/sdr
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnet1DLUT
+  num_in_ch: 3
+  num_out_ch: 3
+  num_bins: 4096
+  base_channels: 16
+  num_downsample: 4
+  fixed_ds_size: 512
+
+train:
+  ema: true
+  ema_decay: 0.999
+
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-4
+    weight_decay: !!float 1e-6
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [200000]
+    restart_weights: [1.0]
+    eta_min: !!float 1e-6
+
+  total_iter: 200000
+  warmup_iter: 2000
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+val:
+  val_freq: 2000
+  save_img: true
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 4
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 4
+      test_y_channel: false
+
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  experiments_root: experiments/train_hdrnet_1dlut
+  log: experiments/train_hdrnet_1dlut
+  visualization: experiments/train_hdrnet_1dlut/visualization
+
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 2000
+  use_tb_logger: true

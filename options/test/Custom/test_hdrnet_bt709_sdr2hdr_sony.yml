@@ -1,0 +1,36 @@
+name: test_hdrnet_bt709_sdr2hdr_sony_xr70
+model_type: SRModel
+scale: 1
+num_gpu: 0
+manual_seed: 1234
+dist: false
+
+datasets:
+  test_1:
+    name: TestSet
+    type: SingleImageDataset
+    dataroot_lq: /mnt/data/wcm/data/hdr/train/sony_xr70/lq_ori
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709Paper
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 4
+  fixed_ds_size: 512
+  global_channels: 256
+
+path:
+  pretrain_network_g: /mnt/data/wcm/HDRNet/experiments/train_hdrnet_bt709_sdr2hdr_sony_xr70/models/net_g_40000.pth
+  strict_load_g: true
+
+val:
+  save_img: true
+  pbar: true
+  suffix: ''
+
+  metrics: {}

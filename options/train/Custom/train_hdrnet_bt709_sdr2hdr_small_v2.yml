@@ -1,0 +1,109 @@
+# GENERATE TIME: Wed Aug 19 17:27:12 2026
+# CMD:
+# basicsr/train.py -opt /mnt/data/wcm/HDRNet/options/train/Custom/train_hdrnet_bt709_sdr2hdr_small_v2.yml --auto_resume
+
+name: train_hdrnet_bt709_sdr2hdr_small_v2
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+
+datasets:
+  train:
+    name: SDR2HDR_Train
+    type: HDRPairedMultiDataset
+    dataroot_gt:
+      - /mnt/data/wcm/data/hdr/train/hdrframes
+      - /mnt/data/wcm/data/hdr/train/dark_scene_1200/hdr
+    dataroot_lq:
+      - /mnt/data/wcm/data/hdr/train/sdrframes_jianying_daili_hevc_60fps
+      - /mnt/data/wcm/data/hdr/train/dark_scene_1200/sdr
+    # dataset_weights: [0.6, 0.4]
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+    gt_size: 738
+    use_hflip: true
+    use_rot: true
+
+    batch_size_per_gpu: 32
+    num_worker_per_gpu: 16
+    dataset_enlarge_ratio: 1
+    load_to_memory: false
+
+  val:
+    name: SDR2HDR_Val
+    type: HDRPairedImageDataset
+    dataroot_gt: /mnt/data/wcm/data/hdr/val/val_hdrframes
+    dataroot_lq: /mnt/data/wcm/data/hdr/val/val_sdrframes
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 16
+  grid_W: 16
+  grid_D: 8
+  base_channels: 1
+  fixed_ds_size: 256
+  global_channels: 128
+
+train:
+  ema: false
+  ema_decay: 0.999
+
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-4
+    weight_decay: !!float 1e-6
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [1000000]
+    restart_weights: [1.0]
+    eta_min: !!float 1e-6
+
+  total_iter: 1000000
+  warmup_iter: -1
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+  chroma_opt:
+    type: ChromaLoss
+    loss_weight: 0.3
+
+val:
+  val_freq: 5000
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+
+logger:
+  print_freq: 200
+  save_checkpoint_freq: 5000
+  use_tb_logger: true
+  tb_logger_freq: 100
+
+path:
+  root: ./experiments
+  pretrain_network_g: ~
+  strict_load: true
+  resume_state: ~
+
+dist_params:
+  backend: nccl
+  port: 29500

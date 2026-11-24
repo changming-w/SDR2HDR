@@ -1,0 +1,121 @@
+import cv2
+import numpy as np
+from os import path as osp
+from torch.utils import data as data
+from torchvision.transforms.functional import normalize
+
+from basicsr.data.transforms import augment, paired_pad_if_needed, paired_random_crop
+from basicsr.utils import FileClient, bgr2ycbcr, img2tensor, scandir
+from basicsr.utils.registry import DATASET_REGISTRY
+
+IMG_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.webp')
+
+
+def imfrombytes_hdr(content, float32=True):
+    """读取 16bit HDR PNG，归一化到 [0, 1]。
+
+    与 imfrombytes 的区别：
+    - 使用 IMREAD_UNCHANGED 保留 16bit 精度
+    - 除以 65535 而非 255
+    """
+    img_np = np.frombuffer(content, np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_UNCHANGED)
+    if float32:
+        img = img.astype(np.float32) / 65535.0
+    return img
+
+
+@DATASET_REGISTRY.register()
+class HDRPairedImageDataset(data.Dataset):
+    """SDR→HDR 配对数据集。
+
+    GT (HDR) 为 16bit PNG，LQ (SDR) 为 8bit PNG。
+    分别用不同的归一化方式读取：
+      - HDR GT:  IMREAD_UNCHANGED → / 65535 → [0, 1]
+      - SDR LQ:  正常读取       → / 255   → [0, 1]
+    """
+
+    def __init__(self, opt):
+        super(HDRPairedImageDataset, self).__init__()
+        self.opt = opt
+        self.file_client = None
+        self.io_backend_opt = opt['io_backend']
+        self.mean = opt['mean'] if 'mean' in opt else None
+        self.std = opt['std'] if 'std' in opt else None
+
+        self.gt_folder, self.lq_folder = opt['dataroot_gt'], opt['dataroot_lq']
+        if 'filename_tmpl' in opt:
+            self.filename_tmpl = opt['filename_tmpl']
+        else:
+            self.filename_tmpl = '{}'
+
+        self.paths = self._get_paired_paths()
+
+    def _get_paired_paths(self):
+        """扫描文件夹，只匹配图像文件，生成配对路径列表。"""
+        # 只收集图像文件
+        lq_files = sorted([f for f in scandir(self.lq_folder) if f.lower().endswith(IMG_EXTENSIONS)])
+        gt_files = sorted([f for f in scandir(self.gt_folder) if f.lower().endswith(IMG_EXTENSIONS)])
+        assert len(lq_files) == len(gt_files), (
+            f'lq and gt datasets have different number of images: '
+            f'{len(lq_files)}, {len(gt_files)}.'
+        )
+        # 按文件名（不含扩展名）匹配
+        lq_basenames = {osp.splitext(f)[0]: f for f in lq_files}
+        gt_basenames = {osp.splitext(f)[0]: f for f in gt_files}
+        assert lq_basenames.keys() == gt_basenames.keys(), (
+            'lq and gt image filenames do not match.'
+        )
+        paths = []
+        for name in sorted(lq_basenames.keys()):
+            paths.append({
+                'lq_path': osp.join(self.lq_folder, lq_basenames[name]),
+                'gt_path': osp.join(self.gt_folder, gt_basenames[name]),
+            })
+        return paths
+
+    def __getitem__(self, index):
+        if self.file_client is None:
+            self.file_client = FileClient(self.io_backend_opt.pop('type'), **self.io_backend_opt)
+
+        scale = self.opt['scale']
+
+        # ---- 读取 GT (HDR, 16bit) ----
+        gt_path = self.paths[index]['gt_path']
+        img_bytes = self.file_client.get(gt_path, 'gt')
+        img_gt = imfrombytes_hdr(img_bytes, float32=True)  # uint16 → float32 / 65535
+
+        # ---- 读取 LQ (SDR, 8bit) ----
+        lq_path = self.paths[index]['lq_path']
+        img_bytes = self.file_client.get(lq_path, 'lq')
+        img_np = np.frombuffer(img_bytes, np.uint8)
+        img_lq = cv2.imdecode(img_np, cv2.IMREAD_COLOR).astype(np.float32) / 255.0
+
+        # ---- 数据增强 ----
+        if self.opt['phase'] == 'train':
+            gt_size = self.opt['gt_size']
+            img_gt, img_lq = paired_pad_if_needed(img_gt, img_lq, gt_size, scale)
+            img_gt, img_lq = paired_random_crop(img_gt, img_lq, gt_size, scale, gt_path)
+            img_gt, img_lq = augment([img_gt, img_lq], self.opt['use_hflip'], self.opt['use_rot'])
+
+        # color space transform
+        if 'color' in self.opt and self.opt['color'] == 'y':
+            img_gt = bgr2ycbcr(img_gt, y_only=True)[..., None]
+            img_lq = bgr2ycbcr(img_lq, y_only=True)[..., None]
+
+        # validation 时裁剪不匹配的 GT
+        if self.opt['phase'] != 'train':
+            img_gt = img_gt[0:img_lq.shape[0] * scale, 0:img_lq.shape[1] * scale, :]
+
+        # BGR→RGB, HWC→CHW, numpy→tensor
+        img_gt, img_lq = img2tensor([img_gt, img_lq], bgr2rgb=True, float32=True)
+
+        # normalize
+        if self.mean is not None or self.std is not None:
+            normalize(img_lq, self.mean, self.std, inplace=True)
+            normalize(img_gt, self.mean, self.std, inplace=True)
+
+        return {'lq': img_lq, 'gt': img_gt, 'lq_path': lq_path, 'gt_path': gt_path}
+
+    def __len__(self):
+        return len(self.paths)

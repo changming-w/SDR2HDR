@@ -1,0 +1,123 @@
+# GENERATE TIME: Wed Nov 12 10:25:28 2025
+# CMD:
+# basicsr/train.py -opt options/train/Custom/train_sr_resnet_2x_split_plus.yml
+
+# 顶级核心参数
+name: sr_resnet_2x_split_plus
+model_type: SRModel
+scale: 2
+num_gpu: 1
+manual_seed: 0
+use_amp: false  # 不启用混合精度训练
+dist: false  # 单GPU训练，关闭分布式
+auto_resume: true  # 不自动恢复训练
+is_train: true  # 训练模式
+root_path: /mnt/ext_ssd/wangchangming/BasicSR  # 项目根目录（统一路径基准）
+
+# 数据集配置
+datasets:
+  train:
+    name: SR2xTrainDataset
+    type: PairedImageDataset
+    dataroot_gt: /mnt/ext_ssd/wangchangming/BasicSR/datasets/SR/train_hr_patches  # 训练集HR路径
+    dataroot_lq: /mnt/ext_ssd/wangchangming/BasicSR/datasets/SR/train_lr_patches  # 训练集LR路径
+    io_backend:
+      type: disk  # 本地磁盘加载
+    gt_size: 256  # 训练patch尺寸
+    scale: 2  # 超分倍数
+    use_hflip: false  # 不启用水平翻转增强
+    use_rot: false  # 不启用旋转增强
+    num_worker_per_gpu: 12  # 数据加载线程数
+    batch_size_per_gpu: 64  # 单GPU批次大小
+    dataset_enlarge_ratio: 1  # 不扩充数据集
+    prefetch_mode: ~  # 不启用预加载
+    pin_memory: false  # 不锁定内存
+    phase: train  # 训练阶段
+
+  val:
+    name: SR2xValDataset
+    type: PairedImageDataset
+    dataroot_gt: /mnt/ext_ssd/wangchangming/AISR/data/val/gt  # 验证集HR路径
+    dataroot_lq: /mnt/ext_ssd/wangchangming/AISR/data/val/lq  # 验证集LR路径
+    io_backend:
+      type: disk
+    scale: 2
+    cache_data: false  # 关闭缓存，避免加载隐性错误
+    num_worker_per_gpu: 0  # 禁用多线程，防止验证卡死
+    batch_size_per_gpu: 1  # 验证集单批次
+    phase: val  # 验证阶段
+
+# 网络配置
+network_g:
+  type: SRResNet_PU4_PS4_Split_Plus_Model  # 自定义模型类型
+  num_channels: 64  # 模型通道数
+
+# 路径配置（修复变量冲突，自动创建目录）
+path:
+  # root: /mnt/ext_ssd/wangchangming/BasicSR/experiments
+  experiments_root: experiments
+  log: log
+  val_images: experiments/sr_resnet_2x_split_plus/val_images
+  models: models
+  training_states: training_states
+  pretrain_network_g: /mnt/ext_ssd/wangchangming/BasicSR/experiments/pretrained_models/net_g_200000.pth
+  strict_load_g: false  # 非严格加载模型参数
+  resume_state: ~  # 不恢复训练状态
+
+# 训练配置
+train:
+  optim_g:
+    type: Adam  # 优化器
+    lr: !!float 1e-4  # 初始学习率
+    weight_decay: !!float 1e-6  # 权重衰减
+    betas: [0.9, 0.999]  # Adam参数
+    eps: !!float 1e-8  # 数值稳定性参数
+  scheduler:
+    type: CosineAnnealingRestartLR  # 学习率调度器
+    periods: [300000]  # 学习率周期
+    restart_weights: [1]  # 重启权重
+    eta_min: !!float 1e-6  # 最小学习率
+  total_iter: 300000  # 总迭代次数
+  warmup_iter: -1  # 不启用热身学习率
+  pixel_opt:
+    type: L1Loss  # 像素损失函数
+    loss_weight: 1.0  # 损失权重
+    reduction: mean  # 损失计算方式
+  gradient_clip: 0.01  # 梯度裁剪阈值
+
+# 验证配置（确保图片保存）
+val:
+  val_freq: 5000  # 每1000次迭代验证一次
+  save_img: true  # 强制保存验证图片
+  img_save_path: experiments/sr_resnet_2x_split_plus/val_images  # 与path中val_images路径严格一致
+  img_format: 'png'  # 图片格式
+  pad_to_multiples: 4  # 补边到4的倍数
+  padding_mode: 'reflect'  # 补边模式
+  metrics:
+    psnr:
+      type: calculate_psnr  # 计算PSNR
+      crop_border: 2  # 裁剪边界像素
+      test_y_channel: false  # 不使用Y通道计算
+    ssim:
+      type: calculate_ssim  # 计算SSIM
+      crop_border: 2
+      test_y_channel: false
+
+# 日志配置
+logger:
+  print_freq: 500  # 每100次迭代打印一次日志
+  save_checkpoint_freq: 5000  # 每5000次迭代保存一次模型
+  use_tb_logger: true  # 使用TensorBoard
+  tb_logger_freq: 500  # TensorBoard日志频率
+  wandb:
+    project: ~  # 不使用WandB
+    resume_id: ~
+
+# 分布式配置（单GPU无需修改）
+dist_params:
+  backend: nccl
+  port: 29500
+
+# 其他配置
+find_unused_parameters: false  # 不查找未使用参数
+use_deterministic_algorithms: false  # 不使用确定性算法

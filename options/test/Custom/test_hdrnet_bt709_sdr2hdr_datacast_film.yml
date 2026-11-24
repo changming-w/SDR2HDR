@@ -1,0 +1,46 @@
+name: test_hdrnet_bt709_sdr2hdr_datacast_film
+model_type: SRModel
+scale: 1
+num_gpu: 0
+manual_seed: 12
+
+datasets:
+  val:
+    name: SDR2HDR_Test
+    type: SingleImageDataset
+    dataroot_lq: /mnt/data/wcm/data/hdr/train/数据采集/截图_亮场景_FilmMaker_色温标准_MEMC关闭/dump_output_sdr_vb1
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709PaperLegacy
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 16
+  grid_W: 16
+  grid_D: 8
+  base_channels: 1
+  fixed_ds_size: 256
+  global_channels: 64
+
+val:
+  val_freq: 1
+  suffix: ~
+  save_img: true
+
+logger:
+  print_freq: 1
+  save_checkpoint_freq: 999999
+  use_tb_logger: false
+  tb_logger_freq: 100
+
+path:
+  root: ./experiments
+  pretrain_network_g: /mnt/data/wcm/HDRNet/experiments/train_hdrnet_bt709_sdr2hdr_datacast_filmmaker/models/net_g_150000.pth
+  strict_load: true
+  resume_state: ~
+
+dist_params:
+  backend: nccl
+  port: 29500

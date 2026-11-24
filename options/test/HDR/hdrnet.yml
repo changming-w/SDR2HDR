@@ -1,0 +1,73 @@
+name: hdrnet0130
+model_type: SRModel   # 和你训练时的一样
+scale: 1
+num_gpu: 1
+manual_seed: 10
+dist: false
+
+datasets:
+  # test_1:
+  #   name: HDRNetTest1
+  #   type: SingleImageDataset
+  #   dataroot_lq: /mnt/data/datasets/HDR/test_1223
+  #   io_backend:
+  #     type: disk
+
+  # test_2:
+  #   name: pingranxindong
+  #   type: SingleImageDataset
+  #   dataroot_lq: /mnt/data/datasets/HDR/frames/再见，怦然心动.mp4
+  #   io_backend:
+  #     type: disk
+
+  # test_3:
+  #   name: xindongdeoffer
+  #   type: SingleImageDataset
+  #   dataroot_lq: /mnt/data/datasets/HDR/frames/令人心动的offer
+  #   io_backend:
+  #     type: disk
+
+  # test_4:
+  #   name: sony_4k
+  #   type: SingleImageDataset
+  #   dataroot_lq: /mnt/data/datasets/HDR/frames/Sony.4K.DEMO_Beautiful.Sea_HEVC_fps30_0
+  #   io_backend:
+  #     type: disk
+
+  # test_5:
+  #   name: budalagong
+  #   type: SingleImageDataset
+  #   dataroot_lq: /mnt/data/datasets/HDR/frames/西藏拉萨布达拉宫航拍_fps30_0
+  #   io_backend:
+  #     type: disk
+
+  test_6:
+    name: DeblurHD
+    type: SingleImageDataset
+    dataroot_lq: /mnt/data/datasets/demo/videos_test/output/法甲 1080_24.98
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnet
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 16
+  grid_W: 16
+  grid_D: 8
+  base_channels: 16
+  num_downsample: 3
+  num_residual: 2
+
+inference:
+  hdrnet_strength: 0.15
+
+path:
+  pretrain_network_g: /mnt/data/wcm/HDRNet/experiments/train_hdrnet_zhuti_tiliang/models/net_g_latest.pth
+  strict_load_g: true
+
+val:
+  save_img: true
+  pbar: true
+  suffix: ''
+  metrics: {}               # 没有 GT，不计算指标

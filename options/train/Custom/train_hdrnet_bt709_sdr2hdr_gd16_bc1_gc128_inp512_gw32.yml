@@ -1,0 +1,107 @@
+# GENERATE TIME: Wed Oct 21 17:50:04 2026
+# CMD:
+# basicsr/train.py -opt /mnt/data/wcm/HDRNet/options/train/Custom/train_hdrnet_bt709_sdr2hdr_gd16_bc1_gc128_inp512_gw32.yml
+
+# 2.073M 512x512->32x32x16
+name: train_hdrnet_bt709_sdr2hdr_gd16_bc1_gc128_inp512_gw32_v3
+model_type: SRModel
+scale: 1
+num_gpu: 1
+manual_seed: 1234
+
+datasets:
+  train:
+    name: SDR2HDR_Train
+    type: HDRPairedImageDataset
+    dataroot_gt: /mnt/data/wcm/data/hdr/train/数据采集/电影模式_色彩空间原始色温标准关闭LD_vb1_1080p/dump_hdr
+    dataroot_lq: /mnt/data/wcm/data/hdr/train/数据采集/电影模式_色彩空间原始色温标准关闭LD_vb1_1080p/dump_sdr
+    # dataset_weights: [0.6, 0.4]
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+    gt_size: 512
+    use_hflip: true
+    use_rot: true
+
+    batch_size_per_gpu: 64
+    num_worker_per_gpu: 16
+    dataset_enlarge_ratio: 1
+    load_to_memory: true
+
+  val:
+    name: SDR2HDR_Val
+    type: HDRPairedImageDataset
+    filename_tmpl: '{}'
+    dataroot_gt: /mnt/data/wcm/data/hdr/train/数据采集/电影模式_色彩空间原始色温标准关闭LD_vb1_1080p/val_dump_hdr
+    dataroot_lq: /mnt/data/wcm/data/hdr/train/数据采集/电影模式_色彩空间原始色温标准关闭LD_vb1_1080p/val_dump_sdr
+    io_backend:
+      type: disk
+
+network_g:
+  type: HDRnetBT709Paper
+  num_in_ch: 3
+  num_out_ch: 3
+  grid_H: 32
+  grid_W: 32
+  grid_D: 16
+  base_channels: 1
+  fixed_ds_size: 512
+  global_channels: 128
+
+train:
+  ema: false
+  ema_decay: 0.999
+
+  optim_g:
+    type: AdamW
+    lr: !!float 2e-4
+    weight_decay: !!float 1e-6
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [1000000]
+    restart_weights: [1.0]
+    eta_min: !!float 1e-6
+
+  total_iter: 1000000
+  warmup_iter: -1
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+  # chroma_opt:
+  #   type: ChromaLoss
+  #   loss_weight: 0.3
+
+val:
+  val_freq: 5000
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+
+logger:
+  print_freq: 200
+  save_checkpoint_freq: 5000
+  use_tb_logger: true
+  tb_logger_freq: 100
+
+path:
+  root: ./experiments
+  pretrain_network_g: ~
+  strict_load: true
+  resume_state: ~
+
+dist_params:
+  backend: nccl
+  port: 29500
